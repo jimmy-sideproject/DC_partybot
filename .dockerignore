@@ -26,6 +26,7 @@ logs/
 
 # 文檔
 *.md
+!README.md
 
 # OS 檔案
 .DS_Store

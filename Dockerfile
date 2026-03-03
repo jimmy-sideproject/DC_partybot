@@ -18,10 +18,10 @@ ENV PYTHONUNBUFFERED=1
 ENV PYTHONIOENCODING=utf-8
 ENV PYTHONDONTWRITEBYTECODE=1
 
-# 複製 pyproject.toml 和 README.md 並安裝依賴
-COPY pyproject.toml README.md .
+# 複製 requirements.txt 並安裝依賴
+COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir .
+    && pip install --no-cache-dir -r requirements.txt
 
 # 複製應用程式碼
 COPY . .
