@@ -166,13 +166,13 @@ class Utils(commands.Cog):
     async def before_check_reminders(self):
         await self.bot.wait_until_ready()
 
-    @app_commands.command(name="remind", description="設定提醒 (格式: YYYY-MM-DD HH:MM)")
+    @app_commands.command(name="remind", description="設定提醒 (格式: [YYYY-]MM-DD HH:MM)")
     @app_commands.describe(
-        time_str="時間 (格式: 2024-01-01 12:00)",
+        time_str="時間 (格式: 01-01 12:00 或 2024-01-01 12:00)",
         message="提醒內容",
-        repeat="重複模式"
+        repeat_mode="重複模式 (預設: 不重複)"
     )
-    @app_commands.choices(repeat=[
+    @app_commands.choices(repeat_mode=[
         app_commands.Choice(name="不重複", value="none"),
         app_commands.Choice(name="每天", value="daily"),
         app_commands.Choice(name="每週", value="weekly"),
@@ -183,21 +183,33 @@ class Utils(commands.Cog):
         interaction: discord.Interaction, 
         time_str: str, 
         message: str, 
-        repeat: app_commands.Choice[str] = None
+        repeat_mode: app_commands.Choice[str] = None
     ):
         """設定提醒"""
         try:
-            # 驗證時間格式
+            # 處理時間格式
+            reminder_time = None
             try:
-                reminder_time = datetime.strptime(time_str, "%Y-%m-%d %H:%M")
+                # 嘗試完整格式 YYYY-MM-DD HH:MM
+                try:
+                    reminder_time = datetime.strptime(time_str, "%Y-%m-%d %H:%M")
+                except ValueError:
+                    # 嘗試簡短格式 MM-DD HH:MM，自動補上今年年份
+                    current_year = datetime.now().year
+                    reminder_time = datetime.strptime(f"{current_year}-{time_str}", "%Y-%m-%d %H:%M")
+
                 if reminder_time < datetime.now():
                     await interaction.response.send_message("⚠️ 時間不能設為過去！", ephemeral=True)
                     return
+                
+                # 更新 time_str 為完整格式，以便儲存
+                time_str = reminder_time.strftime("%Y-%m-%d %H:%M")
             except ValueError:
-                await interaction.response.send_message("⚠️ 時間格式錯誤！請使用 YYYY-MM-DD HH:MM (例如 2024-01-01 12:00)", ephemeral=True)
+                await interaction.response.send_message("⚠️ 時間格式錯誤！請使用 MM-DD HH:MM (例如 01-01 12:00) 或完整格式", ephemeral=True)
                 return
 
-            repeat_value = repeat.value if repeat else "none"
+            repeat_value = repeat_mode.value if repeat_mode else "none"
+            repeat_name = repeat_mode.name if repeat_mode else "不重複"
             
             # 確保 key 存在
             if time_str not in self.reminders:
@@ -213,17 +225,97 @@ class Utils(commands.Cog):
             
             self.save_reminders()
             
-            repeat_name = repeat.name if repeat else "不重複"
             embed = discord.Embed(title="✅ 提醒已設定", color=discord.Color.green())
             embed.add_field(name="時間", value=time_str)
             embed.add_field(name="內容", value=message)
-            embed.add_field(name="重複", value=repeat_name)
+            embed.add_field(name="重複模式", value=repeat_name)
             
             await interaction.response.send_message(embed=embed)
             
         except Exception as e:
             self.logger.error(f"設定提醒失敗: {e}")
             await interaction.response.send_message(f"設定失敗: {str(e)}", ephemeral=True)
+
+    @app_commands.command(name="list_reminders", description="列出我設定的提醒")
+    async def list_reminders(self, interaction: discord.Interaction):
+        """列出使用者的提醒"""
+        user_reminders = []
+        user_id = interaction.user.id
+        
+        for time_str, reminders in self.reminders.items():
+            for i, rem in enumerate(reminders):
+                if rem.get("user_id") == user_id:
+                     user_reminders.append({
+                         "time": time_str, 
+                         "message": rem.get("message"),
+                         "repeat": rem.get("repeat", "none"),
+                     })
+        
+        if not user_reminders:
+            await interaction.response.send_message("📭 你目前沒有設定任何提醒。", ephemeral=True)
+            return
+
+        # 排序
+        user_reminders.sort(key=lambda x: x["time"])
+        
+        embed = discord.Embed(title="📋 我的提醒列表", color=discord.Color.blue())
+        description = ""
+        for i, rem in enumerate(user_reminders):
+             repeat_text = {"daily": "每天", "weekly": "每週", "monthly": "每月", "none": "不重複"}.get(rem["repeat"], "不重複")
+             description += f"**{i+1}.** `{rem['time']}` - {rem['message']} ({repeat_text})\n"
+        
+        embed.description = description
+        embed.set_footer(text="使用 /delete_reminder <編號> 來刪除提醒")
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    @app_commands.command(name="delete_reminder", description="刪除提醒")
+    @app_commands.describe(index="要刪除的提醒編號 (請先使用 /list_reminders 查看)")
+    async def delete_reminder(self, interaction: discord.Interaction, index: int):
+        """刪除提醒"""
+        user_id = interaction.user.id
+        # 使用列表儲存，方便排序與 index 對應
+        user_reminders_list_objs = [] 
+        
+        # 為了正確對應 index，必須使用與 list_reminders 相同的邏輯
+        for time_str, reminders in self.reminders.items():
+            for i, rem in enumerate(reminders):
+                if rem.get("user_id") == user_id:
+                     user_reminders_list_objs.append({
+                         "key": time_str,
+                         "data": rem
+                     })
+        
+        # 排序
+        user_reminders_list_objs.sort(key=lambda x: x["key"])
+
+        if index < 1 or index > len(user_reminders_list_objs):
+            await interaction.response.send_message(f"❌ 無效的編號。請輸入 1 到 {len(user_reminders_list_objs)} 之間的數字。", ephemeral=True)
+            return
+
+        target_obj = user_reminders_list_objs[index-1]
+        target_key = target_obj["key"]
+        target_data = target_obj["data"]
+
+        # 執行刪除
+        if target_key in self.reminders:
+            reminders_list = self.reminders[target_key]
+            
+            # 因為字典中的物件參考是相同的，可以直接 remove
+            if target_data in reminders_list:
+                reminders_list.remove(target_data)
+                
+                # 如果該時間點沒有其他提醒了，清理 key
+                if not reminders_list:
+                    del self.reminders[target_key]
+                
+                self.save_reminders()
+                
+                message_preview = target_data.get('message', '無內容')
+                await interaction.response.send_message(f"✅ 已刪除提醒 #{index}：`{target_key}` - {message_preview}", ephemeral=True)
+            else:
+                 await interaction.response.send_message("❌ 刪除失敗，該提醒可能已被刪除。", ephemeral=True)
+        else:
+            await interaction.response.send_message("❌ 刪除失敗，該時間點的提醒已不存在。", ephemeral=True)
 
     @app_commands.command(name="draw", description="從伺服器或語音頻道抽選使用者")
     @app_commands.describe(

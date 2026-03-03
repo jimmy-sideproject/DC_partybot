@@ -265,7 +265,9 @@ async def help_command(interaction: discord.Interaction):
         name="🎮 娛樂指令",
         value=(
             "`/draw <人數>` - 抽取幸運兒 (支援語音/文字頻道/全伺服器)\n"
-            "`/remind <時間> <訊息> [重複]` - 設定提醒 (支援每日/每週/每月)"
+            "`/remind <時間> <訊息> [重複模式]` - 設定提醒\n"
+            "`/list_reminders` - 查看我的提醒\n"
+            "`/delete_reminder <編號>` - 刪除提醒"
         ),
         inline=False,
     )
