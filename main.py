@@ -71,41 +71,21 @@ def load_token():
 
 
 async def check_ffmpeg():
-    """檢查 FFMPEG 是否可用"""
-    try:
-        import subprocess
-
-        process = await asyncio.create_subprocess_exec(
-            "ffmpeg",
-            "-version",
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        stdout, stderr = await process.communicate()
-        if process.returncode == 0:
-            logger.info("FFMPEG 檢查成功：已正確安裝")
-            return True
-        else:
-            logger.error(f"FFMPEG 檢查失敗: {stderr.decode()}")
-            return False
-    except Exception as e:
-        logger.error(f"FFMPEG 檢查失敗: {str(e)}")
-        return False
+    """檢查 FFMPEG 是否可用 (已棄用)"""
+    return True
 
 
 class PartyBot(commands.Bot):
     async def setup_hook(self):
         """在機器人啟動前的初始化設置"""
         try:
-            # 檢查 FFMPEG
-            if not await check_ffmpeg():
-                logger.error("FFMPEG 未正確安裝，音樂功能可能無法使用")
+            # 檢查 FFMPEG (已移除音樂功能，不再需要強制檢查)
+            # if not await check_ffmpeg():
+            #     logger.error("FFMPEG 未正確安裝，音樂功能可能無法使用")
 
-            # 定義需要載入的 Cogs (優先選擇 utils_cog，移除 utility_cog 避免重複)
+            # 定義需要載入的 Cogs
             cog_list = [
-                "music_cog",
-                "emoji_cog",
-                "utils_cog",  # 優先使用此 cog，功能更完整
+                "utils_cog",
             ]
 
             # 追蹤已載入命令和失敗的 cog
@@ -181,20 +161,12 @@ class PartyBot(commands.Bot):
                     description="感謝邀請我加入你的伺服器！使用 `/help` 可以查看所有指令。",
                     color=discord.Color.blue(),
                 )
+                
+                # 功能列表
                 embed.add_field(
-                    name="🎵 音樂指令",
-                    value="`/play` - 播放音樂\n`/skip` - 跳過歌曲\n`/stop` - 停止播放",
+                    name="✨ 主要功能",
+                    value="`/draw` - 隨機抽取成員\n`/remind` - 設定定期提醒",
                     inline=True,
-                )
-                embed.add_field(
-                    name="🎮 娛樂指令",
-                    value="`/random` - 隨機抽人\n`/dice_roll` - 擲骰子\n`/poll` - 建立投票",
-                    inline=True,
-                )
-                embed.add_field(
-                    name="📝 其他功能",
-                    value="`/emoji` - 表情符號推薦\n`/remind` - 設定提醒",
-                    inline=False,
                 )
                 try:
                     await channel.send(embed=embed)
@@ -288,37 +260,12 @@ async def help_command(interaction: discord.Interaction):
         color=discord.Color.blue(),
     )
 
-    # 音樂功能
-    embed.add_field(
-        name="🎵 音樂指令",
-        value=(
-            "`/play <歌曲>` - 播放音樂\n"
-            "`/skip` - 跳過當前歌曲\n"
-            "`/loop` - 切換循環播放\n"
-            "`/stop` - 停止播放並清空佇列"
-        ),
-        inline=False,
-    )
-
     # 娛樂功能
     embed.add_field(
         name="🎮 娛樂指令",
         value=(
-            "`/random` - 從語音頻道隨機抽選一人\n"
-            "`/dice_roll [最大值]` - 擲骰子\n"
-            "`/poll <問題> <選項>` - 建立投票\n"
-            "`/emoji <文字>` - 獲取表情符號推薦"
-        ),
-        inline=False,
-    )
-
-    # 實用工具
-    embed.add_field(
-        name="🔧 實用工具",
-        value=(
-            "`/userinfo [用戶]` - 顯示用戶資訊\n"
-            "`/remind <分鐘> <訊息>` - 設定提醒\n"
-            "`/clear [數量]` - 清除訊息 (需管理權限)"
+            "`/draw <人數>` - 抽取幸運兒 (支援語音/文字頻道/全伺服器)\n"
+            "`/remind <時間> <訊息> [重複]` - 設定提醒 (支援每日/每週/每月)"
         ),
         inline=False,
     )

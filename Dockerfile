@@ -6,7 +6,6 @@ WORKDIR /app
 
 # 安裝系統依賴
 RUN apt-get update && apt-get install -y \
-    ffmpeg \
     curl \
     ca-certificates \
     git \
@@ -17,15 +16,12 @@ RUN apt-get update && apt-get install -y \
 # 設定環境變數
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONIOENCODING=utf-8
-ENV PYTHONHTTPSVERIFY=0
 ENV PYTHONDONTWRITEBYTECODE=1
-ENV YT_DLP_SSL_NO_VERIFY=1
 
 # 複製 pyproject.toml 並安裝依賴
 COPY pyproject.toml .
 RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir . \
-    && pip install --no-cache-dir --upgrade yt-dlp
+    && pip install --no-cache-dir .
 
 # 複製應用程式碼
 COPY . .
@@ -35,9 +31,7 @@ RUN mkdir -p data logs \
     && chmod 755 data logs
 
 # 驗證安裝
-RUN ffmpeg -version > /dev/null 2>&1 && echo "FFmpeg installed successfully" \
-    && yt-dlp --version > /dev/null 2>&1 && echo "yt-dlp installed successfully" \
-    && python -c "import discord; print('discord.py version:', discord.__version__)"
+RUN python -c "import discord; print('discord.py version:', discord.__version__)"
 
 # 健康檢查
 HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \

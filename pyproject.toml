@@ -19,18 +19,8 @@ classifiers = [
     "Topic :: Multimedia :: Sound/Audio :: Players",
 ]
 dependencies = [
-    "aiohttp>=3.12.15",
     "discord-py>=2.6.3",
-    "google-api-python-client>=2.183.0",
-    "google-auth>=2.40.3",
-    "google-auth-httplib2>=0.2.0",
-    "mutagen>=1.47.0",
-    "pycryptodomex>=3.23.0",
-    "pynacl>=1.6.0",
     "python-dotenv>=1.1.1",
-    "redis>=6.4.0",
-    "spotipy>=2.25.1",
-    "yt-dlp>=2025.9.23",
 ]
 
 [dependency-groups]
@@ -54,8 +44,6 @@ packages = ["."]
 exclude = [
     "*.log",
     "logs/",
-    "temp_audio/",
-    "*.cookies",
     ".env*",
     "requirements.txt",
     "docker-compose.yml",

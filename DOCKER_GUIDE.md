@@ -15,7 +15,6 @@
    - 編輯 `.env` 檔案，填入以下內容：
    ```
    DISCORD_TOKEN=你的Discord機器人Token
-   YOUTUBE_API_KEY=你的YouTube_API金鑰
    COMMAND_PREFIX=!
    ```
 
