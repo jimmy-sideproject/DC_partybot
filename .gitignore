@@ -59,6 +59,8 @@ logs/
 *.mp4
 *.wav
 *.ogg
+
+data/join_video_channels.json
 temp_audio/
 
 # 安裝錯誤

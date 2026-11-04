@@ -4,6 +4,7 @@ from discord import app_commands
 import asyncio
 from dotenv import load_dotenv
 import os
+import json
 import logging
 import sys
 from pathlib import Path
@@ -75,17 +76,6 @@ async def check_ffmpeg():
     return True
 
 
-def _channel_id_from_env(name: str) -> int | None:
-    value = os.getenv(name, "").strip()
-    if not value:
-        return None
-    try:
-        return int(value)
-    except ValueError:
-        logger.error("環境變數 %s 必須是數字頻道 ID；語音影片功能將停用", name)
-        return None
-
-
 def should_send_voice_join_video(
     is_bot: bool,
     before_channel_id: int | None,
@@ -103,27 +93,73 @@ def should_send_voice_join_video(
 class PartyBot(commands.Bot):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.join_video_voice_channel_id = _channel_id_from_env(
-            "JOIN_VIDEO_VOICE_CHANNEL_ID"
+        self.join_video_config_path = (
+            Path(__file__).resolve().parent / "data" / "join_video_channels.json"
         )
-        self.join_video_text_channel_id = _channel_id_from_env(
-            "JOIN_VIDEO_TEXT_CHANNEL_ID"
-        )
+        self.join_video_config_valid = True
+        self.join_video_channels = self._load_join_video_channels()
         self.join_video_path = (
             Path(__file__).resolve().parent / "assets" / "voice_channel_join.mp4"
         )
 
+    def _load_join_video_channels(self):
+        try:
+            with self.join_video_config_path.open(encoding="utf-8") as config_file:
+                channels = json.load(config_file)
+            if isinstance(channels, dict):
+                return channels
+            self.join_video_config_valid = False
+            logger.error("語音影片設定格式錯誤，忽略設定檔")
+        except FileNotFoundError:
+            return {}
+        except (OSError, json.JSONDecodeError) as e:
+            self.join_video_config_valid = False
+            logger.error("載入語音影片設定失敗: %s", e)
+        return {}
+
+    def _save_join_video_channels(self, channels):
+        try:
+            self.join_video_config_path.parent.mkdir(parents=True, exist_ok=True)
+            temp_path = self.join_video_config_path.with_suffix(".tmp")
+            temp_path.write_text(
+                json.dumps(channels, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
+            temp_path.replace(self.join_video_config_path)
+            return True
+        except OSError as e:
+            logger.error("儲存語音影片設定失敗: %s", e)
+            return False
+
+    def set_join_video_channels(self, guild_id, voice_channel_id, text_channel_id):
+        if not self.join_video_config_valid:
+            return False
+        channels = dict(self.join_video_channels)
+        channels[str(guild_id)] = {
+            "voice_channel_id": voice_channel_id,
+            "text_channel_id": text_channel_id,
+        }
+        if not self._save_join_video_channels(channels):
+            return False
+        self.join_video_channels = channels
+        return True
+
+    def clear_join_video_channels(self, guild_id):
+        if not self.join_video_config_valid:
+            return False
+        channels = dict(self.join_video_channels)
+        channels.pop(str(guild_id), None)
+        if not self._save_join_video_channels(channels):
+            return False
+        self.join_video_channels = channels
+        return True
+
     async def setup_hook(self):
         """在機器人啟動前的初始化設置"""
         try:
-            if (
-                self.join_video_voice_channel_id is None
-                or self.join_video_text_channel_id is None
-            ):
-                logger.info(
-                    "語音進入影片功能未啟用：請設定兩個 JOIN_VIDEO_*_CHANNEL_ID"
-                )
-            elif not self.join_video_path.is_file():
+            logger.info(
+                "已載入 %s 個伺服器的語音影片設定", len(self.join_video_channels)
+            )
+            if self.join_video_channels and not self.join_video_path.is_file():
                 logger.warning("找不到語音進入影片檔案: %s", self.join_video_path)
 
             # 檢查 FFMPEG (已移除音樂功能，不再需要強制檢查)
@@ -222,26 +258,31 @@ class PartyBot(commands.Bot):
                 break
 
     async def on_voice_state_update(self, member, before, after):
+        settings = self.join_video_channels.get(str(member.guild.id), {})
+        if not isinstance(settings, dict):
+            return
+        voice_channel_id = settings.get("voice_channel_id")
+        text_channel_id = settings.get("text_channel_id")
         before_channel_id = before.channel.id if before.channel else None
         after_channel_id = after.channel.id if after.channel else None
         if not should_send_voice_join_video(
             member.bot,
             before_channel_id,
             after_channel_id,
-            self.join_video_voice_channel_id,
+            voice_channel_id,
         ):
             return
 
-        if self.join_video_text_channel_id is None:
+        if text_channel_id is None:
             return
         if not self.join_video_path.is_file():
             logger.error("找不到語音進入影片檔案: %s", self.join_video_path)
             return
 
-        channel = self.get_channel(self.join_video_text_channel_id)
+        channel = self.get_channel(text_channel_id)
         if channel is None:
             try:
-                channel = await self.fetch_channel(self.join_video_text_channel_id)
+                channel = await self.fetch_channel(text_channel_id)
             except discord.HTTPException as e:
                 logger.error("無法取得影片目標文字頻道: %s", e)
                 return
@@ -355,7 +396,9 @@ async def help_command(interaction: discord.Interaction):
             "`/draw <人數>` - 抽取幸運兒 (支援語音/文字頻道/全伺服器)\n"
             "`/remind <時間> <訊息> [重複模式]` - 設定提醒\n"
             "`/list_reminders` - 查看我的提醒\n"
-            "`/delete_reminder <編號>` - 刪除提醒"
+            "`/delete_reminder <編號>` - 刪除提醒\n"
+            "`/set_join_video` - 設定進入語音頻道時傳送影片\n"
+            "`/clear_join_video` - 清除語音影片設定"
         ),
         inline=False,
     )

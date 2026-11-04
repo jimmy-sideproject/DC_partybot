@@ -50,6 +50,114 @@ class Utils(commands.Cog):
         except Exception as e:
             self.logger.error(f"儲存提醒事項失敗: {e}")
 
+    @app_commands.command(
+        name="set_join_video", description="設定進入語音頻道時傳送影片的頻道"
+    )
+    @app_commands.describe(
+        voice_channel="有人加入時觸發的語音頻道",
+        text_channel="傳送影片的文字頻道",
+    )
+    @app_commands.guild_only()
+    @app_commands.default_permissions(manage_guild=True)
+    async def set_join_video(
+        self,
+        interaction: discord.Interaction,
+        voice_channel: discord.VoiceChannel,
+        text_channel: discord.TextChannel,
+    ):
+        guild = interaction.guild
+        if guild is None:
+            await interaction.response.send_message(
+                "請在伺服器中使用此指令。", ephemeral=True
+            )
+            return
+
+        if not isinstance(interaction.user, discord.Member):
+            await interaction.response.send_message(
+                "請由伺服器成員使用此指令。", ephemeral=True
+            )
+            return
+
+        permissions = interaction.user.guild_permissions
+        if not (permissions.manage_guild or permissions.administrator):
+            await interaction.response.send_message(
+                "只有伺服器管理員可以設定此功能。", ephemeral=True
+            )
+            return
+
+        if voice_channel.guild.id != guild.id or text_channel.guild.id != guild.id:
+            await interaction.response.send_message(
+                "請選擇本伺服器內的頻道。", ephemeral=True
+            )
+            return
+
+        bot_member = guild.me
+        if bot_member is None:
+            await interaction.response.send_message(
+                "無法確認機器人權限，請稍後再試。", ephemeral=True
+            )
+            return
+
+        voice_permissions = voice_channel.permissions_for(bot_member)
+        text_permissions = text_channel.permissions_for(bot_member)
+        if not voice_permissions.view_channel:
+            await interaction.response.send_message(
+                f"機器人沒有查看語音頻道 {voice_channel.mention} 的權限。",
+                ephemeral=True,
+            )
+            return
+        if (
+            not text_permissions.view_channel
+            or not text_permissions.send_messages
+            or not text_permissions.attach_files
+        ):
+            await interaction.response.send_message(
+                f"機器人需要在 {text_channel.mention} 有查看、傳送訊息及附加檔案權限。",
+                ephemeral=True,
+            )
+            return
+
+        if not self.bot.set_join_video_channels(
+            guild.id, voice_channel.id, text_channel.id
+        ):
+            await interaction.response.send_message(
+                "儲存設定失敗，請稍後再試。", ephemeral=True
+            )
+            return
+
+        await interaction.response.send_message(
+            f"✅ 已設定：有人進入 {voice_channel.mention} 時，影片會傳到 "
+            f"{text_channel.mention}。",
+            ephemeral=True,
+        )
+
+    @app_commands.command(name="clear_join_video", description="清除本伺服器的語音影片設定")
+    @app_commands.guild_only()
+    @app_commands.default_permissions(manage_guild=True)
+    async def clear_join_video(self, interaction: discord.Interaction):
+        guild = interaction.guild
+        if guild is None or not isinstance(interaction.user, discord.Member):
+            await interaction.response.send_message(
+                "請由伺服器成員使用此指令。", ephemeral=True
+            )
+            return
+
+        permissions = interaction.user.guild_permissions
+        if not (permissions.manage_guild or permissions.administrator):
+            await interaction.response.send_message(
+                "只有伺服器管理員可以設定此功能。", ephemeral=True
+            )
+            return
+
+        if not self.bot.clear_join_video_channels(guild.id):
+            await interaction.response.send_message(
+                "清除設定失敗，請稍後再試。", ephemeral=True
+            )
+            return
+        await interaction.response.send_message(
+            "✅ 已清除本伺服器的語音影片設定。", ephemeral=True
+        )
+
     def calculate_next_time(self, current_time: datetime, repeat_mode: str) -> datetime:
         """計算下一次提醒時間"""
         if repeat_mode == "daily":

@@ -54,10 +54,8 @@
    ```env
    DISCORD_TOKEN=你的_DISCORD_BOT_TOKEN
    COMMAND_PREFIX=!
-   JOIN_VIDEO_VOICE_CHANNEL_ID=
-   JOIN_VIDEO_TEXT_CHANNEL_ID=
    ```
-   啟用語音進入影片功能時，先在 Discord 使用者設定開啟「開發者模式」，再於指定語音頻道和文字頻道右鍵複製 ID，填入以上兩個欄位，並將影片放在 `assets/voice_channel_join.mp4`（影片檔不提交到 Git）。Bot 需能查看語音頻道，並在目標文字頻道有查看、傳送訊息及附加檔案權限；兩個 ID 留空則停用。
+   啟動後由具備「管理伺服器」權限的管理員使用 `/set_join_video`，直接從選單選擇觸發語音頻道與接收影片的文字頻道；設定會按伺服器保存於 `data/join_video_channels.json`，使用 `/clear_join_video` 可清除。影片檔放在 `assets/voice_channel_join.mp4`（不提交到 Git）。Bot 需能查看語音頻道，並在目標文字頻道有查看、傳送訊息及附加檔案權限。
 
 3. **啟動服務**
    ```bash

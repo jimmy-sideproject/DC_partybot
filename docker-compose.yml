@@ -6,8 +6,6 @@ services:
     environment:
       - DISCORD_TOKEN=${DISCORD_TOKEN}
       - COMMAND_PREFIX=${COMMAND_PREFIX:-!}
-      - JOIN_VIDEO_VOICE_CHANNEL_ID=${JOIN_VIDEO_VOICE_CHANNEL_ID:-}
-      - JOIN_VIDEO_TEXT_CHANNEL_ID=${JOIN_VIDEO_TEXT_CHANNEL_ID:-}
       - PYTHONUNBUFFERED=1
       - TZ=Asia/Taipei
     volumes:
