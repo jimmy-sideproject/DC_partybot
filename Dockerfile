@@ -20,8 +20,8 @@ ENV PYTHONDONTWRITEBYTECODE=1
 
 # 複製 requirements.txt 並安裝依賴
 COPY requirements.txt .
-RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir -r requirements.txt
+RUN python -m pip install --no-cache-dir --upgrade pip==26.2.2 setuptools==84.2.1 \
+    && python -m pip install --no-cache-dir -r requirements.txt
 
 # 複製應用程式碼
 COPY . .
