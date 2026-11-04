@@ -75,10 +75,57 @@ async def check_ffmpeg():
     return True
 
 
+def _channel_id_from_env(name: str) -> int | None:
+    value = os.getenv(name, "").strip()
+    if not value:
+        return None
+    try:
+        return int(value)
+    except ValueError:
+        logger.error("環境變數 %s 必須是數字頻道 ID；語音影片功能將停用", name)
+        return None
+
+
+def should_send_voice_join_video(
+    is_bot: bool,
+    before_channel_id: int | None,
+    after_channel_id: int | None,
+    trigger_channel_id: int | None,
+) -> bool:
+    return (
+        not is_bot
+        and trigger_channel_id is not None
+        and after_channel_id == trigger_channel_id
+        and before_channel_id != trigger_channel_id
+    )
+
+
 class PartyBot(commands.Bot):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.join_video_voice_channel_id = _channel_id_from_env(
+            "JOIN_VIDEO_VOICE_CHANNEL_ID"
+        )
+        self.join_video_text_channel_id = _channel_id_from_env(
+            "JOIN_VIDEO_TEXT_CHANNEL_ID"
+        )
+        self.join_video_path = (
+            Path(__file__).resolve().parent / "assets" / "voice_channel_join.mp4"
+        )
+
     async def setup_hook(self):
         """在機器人啟動前的初始化設置"""
         try:
+            if (
+                self.join_video_voice_channel_id is None
+                or self.join_video_text_channel_id is None
+            ):
+                logger.info(
+                    "語音進入影片功能未啟用：請設定兩個 JOIN_VIDEO_*_CHANNEL_ID"
+                )
+            elif not self.join_video_path.is_file():
+                logger.warning("找不到語音進入影片檔案: %s", self.join_video_path)
+
             # 檢查 FFMPEG (已移除音樂功能，不再需要強制檢查)
             # if not await check_ffmpeg():
             #     logger.error("FFMPEG 未正確安裝，音樂功能可能無法使用")
@@ -173,6 +220,47 @@ class PartyBot(commands.Bot):
                 except Exception as e:
                     logger.error(f"無法在 {channel.name} 發送歡迎訊息: {e}")
                 break
+
+    async def on_voice_state_update(self, member, before, after):
+        before_channel_id = before.channel.id if before.channel else None
+        after_channel_id = after.channel.id if after.channel else None
+        if not should_send_voice_join_video(
+            member.bot,
+            before_channel_id,
+            after_channel_id,
+            self.join_video_voice_channel_id,
+        ):
+            return
+
+        if self.join_video_text_channel_id is None:
+            return
+        if not self.join_video_path.is_file():
+            logger.error("找不到語音進入影片檔案: %s", self.join_video_path)
+            return
+
+        channel = self.get_channel(self.join_video_text_channel_id)
+        if channel is None:
+            try:
+                channel = await self.fetch_channel(self.join_video_text_channel_id)
+            except discord.HTTPException as e:
+                logger.error("無法取得影片目標文字頻道: %s", e)
+                return
+
+        if not isinstance(channel, discord.abc.Messageable):
+            logger.error("設定的影片目標頻道不支援傳送訊息")
+            return
+
+        try:
+            video = discord.File(
+                self.join_video_path, filename=self.join_video_path.name
+            )
+            try:
+                await channel.send(file=video)
+            finally:
+                video.close()
+            logger.info("使用者進入指定語音頻道，已傳送影片")
+        except (discord.HTTPException, OSError) as e:
+            logger.error("傳送語音頻道影片失敗: %s", e)
 
 
 async def main():

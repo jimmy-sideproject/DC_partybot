@@ -1,3 +1,6 @@
+# 媒體檔只由本機 assets bind mount 提供，不打包進公開映像
+assets/*.mp4
+
 # Python 相關
 __pycache__/
 *.pyc
